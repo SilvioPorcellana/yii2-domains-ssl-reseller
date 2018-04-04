@@ -4,6 +4,7 @@
 
   // package type
   "type": "yii2-extension",
+  "minimum-stability": "dev",
 
   "description": "An Yii2 extension providing a common interface to SSL/domains resellers like Namecheap, Godaddy, etc.",
   "keywords": ["yii2", "reseller", "namecheap", "godaddy"],
