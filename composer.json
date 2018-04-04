@@ -1,0 +1,34 @@
+{
+  // package name
+  "name": "themavensystem/yii2-domains-ssl-reseller",
+
+  // package type
+  "type": "yii2-extension",
+
+  "description": "An Yii2 extension providing a common interface to SSL/domains resellers like Namecheap, Godaddy, etc.",
+  "keywords": ["yii2", "reseller", "namecheap", "godaddy"],
+  "license": "BSD-3-Clause",
+  "support": {
+    "issues": "https://github.com/SilvioPorcellana/yii2-domains-ssl-reseller/issues",
+    "wiki": "https://github.com/SilvioPorcellana/yii2-domains-ssl-reseller/wiki",
+    "source": "https://github.com/SilvioPorcellana/yii2-domains-ssl-reseller"
+  },
+  "authors": [
+    {
+      "name": "Silvio Porcellana",
+      "email": "silvio.porcellana@gmail.com"
+    }
+  ],
+
+  // package dependencies
+  "require": {
+    "yiisoft/yii2": "~2.0.0"
+  },
+
+  // class autoloading specs
+  "autoload": {
+    "psr-4": {
+      "themavensystem\\domains-ssl-reseller\\": "src"
+    }
+  }
+}
