@@ -23,13 +23,31 @@
 
   // package dependencies
   "require": {
-    "yiisoft/yii2": "~2.0.0"
+    "yiisoft/yii2": "~2.0.0",
+    "php-http/client-implementation": "^1.0",
+    "php-http/httplug": "^1.0",
+    "php-http/message-factory": "^1.0",
+    "php-http/discovery": "^1.0"
+  },
+
+  "require-dev": {
+    "yiisoft/yii2": "~2.0.0",
+    "phpunit/phpunit": "^4.5 || ^5.0",
+    "php-http/guzzle5-adapter": "^1.0",
+    "guzzlehttp/psr7": "^1.2",
+    "mockery/mockery": "^0.9",
+    "illuminate/support": "^5.0"
   },
 
   // class autoloading specs
   "autoload": {
     "psr-4": {
-      "themavensystem\\domains-ssl-reseller\\": "src"
+      "TheMavenSystem\\DomainsSSLReseller\\": "src"
     }
-  }
+  },
+
+  "scripts": {
+    "test": "vendor/bin/phpunit",
+    "test-ci": "vendor/bin/phpunit --coverage-text --coverage-clover=build/coverage.xml"
+  },
 }

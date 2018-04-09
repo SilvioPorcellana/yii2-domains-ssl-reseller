@@ -7,6 +7,7 @@
 
 namespace TheMavenSystem\DomainsSSLReseller\Reseller;
 
+use TheMavenSystem\DomainsSSLReseller\Http\RequestManager;
 use TheMavenSystem\DomainsSSLReseller\ResellerInterface;
 
 class Namecheap implements ResellerInterface
@@ -14,6 +15,7 @@ class Namecheap implements ResellerInterface
     private $_api_user;
     private $_api_key;
     private $_api_url;
+    private $_request_manager;
 
     /**
      * Namecheap constructor. Needs an api_user and api_key which will then be used with the API calls, and an optional $sanbox param
@@ -31,6 +33,8 @@ class Namecheap implements ResellerInterface
         if ($api_key) {
             $this->_api_key = $api_key;
         }
+
+        $this->_request_manager = new RequestManager();
 
         if ($sandbox) {
             $this->_api_url = "https://api.namecheap.com/xml.response";
@@ -77,11 +81,13 @@ class Namecheap implements ResellerInterface
     public function sslCreate($type, $domains, $email, array $data, $dcv = 'http', $csr = '', $key = '', $webservertype = 'apacheopenssl')
     {
         /* first step - "namecheap create" */
-        $request = [];
-        $request['command'] = "namecheap.ssl.create";
-        $request['type'] = $type;
-        $_create = $this->_get($request);
+        $data['command'] = "namecheap.ssl.create";
+        $data['type'] = $type;
 
+        $request = self::_map_to($data);
+        $request = self::_add_global_fields($request);
+
+        $response = $this->getRequestManager()->sendRequest('GET', $this->_api_url, false, $request);
     }
 
 
@@ -111,34 +117,6 @@ class Namecheap implements ResellerInterface
         // TODO: Implement userSslList() method.
     }
 
-
-
-    /**
-     * private/helper functions
-     */
-
-    private function _get(array $data)
-    {
-        $data = self::_map_to($data);
-        $query_fields = $this->_add_global_fields($data);
-        $query = '';
-        foreach ($query_fields as $field => $value) {
-            $query .= '&' . urlencode($field) . '=' . urldecode($value);
-        }
-        $url = $this->_api_url . '?' . $query;
-
-        $curl_session = curl_init();
-        curl_setopt($curl_session, CURLOPT_URL, $url);
-        curl_setopt($curl_session,CURLOPT_RETURNTRANSFER,true);
-        curl_setopt($curl_session,CURLOPT_HEADER, false);
-        $result = curl_exec($curl_session);
-        curl_close($curl_session);
-    }
-
-
-    private function _parse_result($result) {
-        
-    }
 
 
 

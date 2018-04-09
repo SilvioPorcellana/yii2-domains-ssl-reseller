@@ -6,7 +6,6 @@
  */
 
 namespace TheMavenSystem\DomainsSSLReseller;
-use TheMavenSystem\DomainsSSLReseller\Reseller\Namecheap;
 
 
 /**
@@ -35,7 +34,7 @@ final class Factory
     {
         switch ($reseller_name) {
             case "namecheap":
-                return new Namecheap($api_user, $api_key);
+                return new \TheMavenSystem\DomainsSSLReseller\Reseller\Namecheap($api_user, $api_key);
                 break;
             default:
                 throw new \InvalidArgumentException("Invalid reseller name");
