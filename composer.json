@@ -1,8 +1,6 @@
 {
-  // package name
   "name": "themavensystem/yii2-domains-ssl-reseller",
 
-  // package type
   "type": "yii2-extension",
   "minimum-stability": "dev",
 
@@ -21,7 +19,6 @@
     }
   ],
 
-  // package dependencies
   "require": {
     "yiisoft/yii2": "~2.0.0",
     "php-http/client-implementation": "^1.0",
@@ -39,7 +36,6 @@
     "illuminate/support": "^5.0"
   },
 
-  // class autoloading specs
   "autoload": {
     "psr-4": {
       "TheMavenSystem\\DomainsSSLReseller\\": "src"

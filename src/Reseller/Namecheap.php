@@ -1,7 +1,7 @@
 <?php
 /**
  * @link https://github.com/SilvioPorcellana/yii2-domains-ssl-reseller
- * @copyright Copyright (c) 2018 Mobisit Inc.
+ * @copyright Copyright (c) 2018 The Maven System
  * @license https://opensource.org/licenses/BSD-3-Clause
  */
 
@@ -37,7 +37,7 @@ class Namecheap implements ResellerInterface
         $this->_request_manager = new RequestManager();
 
         if ($sandbox) {
-            $this->_api_url = "https://api.namecheap.com/xml.response";
+            $this->_api_url = "https://api.sandbox.namecheap.com/xml.response";
         } else {
             $this->_api_url = "https://api.namecheap.com/xml.response";
         }
