@@ -96,8 +96,8 @@ interface ResellerInterface
      * ```
      *
      *
-     * @param string $type Can be one of the following: "single", "wildcard", "multidomain"
-     * @param mixed $domains The domain(s) (as a string or as an array) for which we are creating this certificate. Max 3 domains.
+     * @param string $type Can be one of the following: "single", "wildcard"
+     * @param string $domain The domain(s) (as a string or as an array) for which we are creating this certificate. Max 3 domains.
      * @param string $email The email address to send signed SSL certificate files to
      * @param array $data An associative array with the following details:
      *      [
@@ -109,7 +109,10 @@ interface ResellerInterface
      *          'address' => "Los Angeles",
      *          'zip' => "00189",
      *      ]
-     * @param string $dcv The validation type (default is "http" whit a file placed in the /.well-known/pki-validation/ directory
+     * @param string $dcv The validation type. Options are:
+     * - 'email' (email is sent to the chosen approver email
+     * - 'http' (default - a file placed in the /.well-known/pki-validation/ directory)
+     * - 'dns' (a CNAME needs to be created for the selected domain)
      * @param string $csr If absent a new CSR will be created with the $data provided
      * @param string $key If absent a new key will be created
      * @param string $webservertype Allowed values are listed in https://www.namecheap.com/support/api/methods/ssl/activate.aspx
@@ -138,7 +141,7 @@ interface ResellerInterface
      *          ]
      *      ]
      */
-    public function sslCreate($type, $domains, $email, array $data, $dcv = 'http', $csr = '', $key = '', $webservertype = 'apacheopenssl');
+    public function sslCreate($type, $domain, $email, array $data, $dcv = 'http', $csr = '', $private_key = '', $webservertype = 'apacheopenssl', $approver_email = '');
 
     /**
      * ```php
@@ -155,13 +158,24 @@ interface ResellerInterface
      * @return array $certificate Data structure with the following fields:
      *      [
      *          'id' => "123456" (the ID of the certificate)
-     *          'status' => "active" (the current status of the certificate, chosing among: "active", "validating" or "error")
+     *          'status' => "active" (the current status, chosing among: "pending", "active", "validating", "error")
+     *          'expires_on' => 1523345727 (Unix timestamp of the expiration date)
      *          'csr' => "-----BEGIN CERTIFICATE----- MIIFBDCCA+ygAwIBAgIQJXnrY7043Qfa... -----END CERTIFICATE-----",
      *          'crt' => "-----BEGIN CERTIFICATE----- AgIBATANBgkqhkiG9w0BAQUFADBvMQswCQYD... -----END CERTIFICATE-----",
      *          'intermediate' => "-----BEGIN CERTIFICATE----- AgIBATANBgkqhkiG9w0BAQUFADBvMQswCQYD... -----END CERTIFICATE-----",
      *      ]
      */
     public function sslCheck($id);
+
+    /**
+     * This function is used for getting the list of possible "approver emails" for an SSL certificate,
+     * to be used when the "email" domain verification method is selected.
+     * Once chosen, the activation email for this certificate is sent to this email address.
+     *
+     * @param $domain
+     * @return mixed
+     */
+    public function sslApproverEmails($domain);
 
 
     // user
