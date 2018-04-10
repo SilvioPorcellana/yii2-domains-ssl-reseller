@@ -9,16 +9,9 @@
 namespace TheMavenSystem\DomainsSSLReseller\Reseller;
 
 use TheMavenSystem\DomainsSSLReseller\AbstractReseller;
-use TheMavenSystem\DomainsSSLReseller\Http\RequestManager;
-use TheMavenSystem\DomainsSSLReseller\ResellerInterface;
 
 class Namecheap extends AbstractReseller
 {
-    private $_api_user;
-    private $_api_key;
-    private $_api_url;
-    private $_request_manager;
-
     /**
      * Namecheap constructor. Needs an api_user and api_key which will then be used with the API calls, and an optional $sanbox param
      *
@@ -36,11 +29,11 @@ class Namecheap extends AbstractReseller
             $this->_api_key = $api_key;
         }
 
-        $this->_request_manager = new RequestManager();
-
         if ($sandbox) {
+            $this->_sandbox = true;
             $this->_api_url = "https://api.sandbox.namecheap.com/xml.response";
         } else {
+            $this->_sandbox = false;
             $this->_api_url = "https://api.namecheap.com/xml.response";
         }
     }
@@ -79,31 +72,53 @@ class Namecheap extends AbstractReseller
     /**
      * SSL stuff
      */
-
-    /**
-     * This is the method for the Certificate creation part. This part is divided in 2:
-     * - namecheap.ssl.create       This is for the "start" of the creation process, and a CertificateID is returned
-     * - namecheap.ssl.activate     This is for the actual start of the activation process, where the CSR,
-     *
-     * @param string $type
-     * @param string $domains
-     * @param string $email
-     * @param array $data
-     * @param string $dcv
-     * @param string $csr
-     * @param string $key
-     * @param string $webservertype
-     */
-    public function sslCreate($type, $domain, $email, array $data, $dcv = 'http', $csr = '', $private_key = '', $webservertype = 'apacheopenssl', $approver_email = '')
+    
+    
+    public function sslList($search = '')
     {
-        /**
-         * check that $data contains the required fields
-         */
-        if (! self::_check_required_data($data))
+        $search_data = [];
+        $search_data['Command'] = "namecheap.ssl.getList";
+        $search_data['PageSize'] = 100; // TODO: pagination
+        if ($search)
         {
-            throw new \BadMethodCallException('data does not contain all the required fields');
+            $search_data['SearchTerm'] = $search;
         }
 
+        /**
+         * Add global fields (api_key, etc.) to the request array
+         * @see https://www.namecheap.com/support/api/methods/ssl/create.aspx
+         */
+        $request = self::_add_global_fields($search_data);
+
+        /**
+         * make namecheap.ssl.getList API call and get the list back
+         */
+        $return = [];
+        $response = $this->doRequest($request);
+        foreach ($response->CommandResponse->SSLListResult->SSL as $certificate)
+        {
+            $return[(string)$certificate['CertificateID']] = [
+                'id' => (string)$certificate['CertificateID'],
+                'domain' => (string)$certificate['HostName'],
+                'status' => self::_map_status((string)$certificate['Status']),
+                'purchase_time' => strtotime((string)$certificate['PurchaseDate']),
+                'expire_time' => strtotime((string)$certificate['ExpireDate']),
+                'type' => self::_map_type_reverse((string)$certificate['SSLType']),
+            ];
+        }
+
+        return $return;
+    }
+
+
+    /**
+     * @param string $type single|wildcard
+     * @return string $certificate_id
+     *
+     * @see https://www.namecheap.com/support/api/methods/ssl/create.aspx
+     */
+    public function sslCreate($type)
+    {
         /* first step - "namecheap create" */
         $create_data = [];
         $create_data['Command'] = "namecheap.ssl.create";
@@ -119,150 +134,118 @@ class Namecheap extends AbstractReseller
         /**
          * make namecheap.ssl.create API call and get a certificate ID back
          */
-        $response_xml = $this->getHttpClient()->createRequest()
-            ->setMethod('GET')
-            ->setUrl($this->_api_url)
-            ->setData($request)
-            ->send();
-        $response_xml_body = $response_xml->content;
-        if (strlen(trim($response_xml_body)))
+        $response = $this->doRequest($request);
+        $certificate_id = (string)$response->CommandResponse->SSLCreateResult->SSLCertificate['CertificateID'];
+        return $certificate_id;
+    }
+
+
+    /**
+     * @see https://www.namecheap.com/support/api/methods/ssl/activate.aspx
+     */
+    public function sslActivate($certificate_id, $domain, $email, array $data, $dcv = 'http', $csr = '', $private_key = '', $webservertype = 'apacheopenssl', $approver_email = '')
+    {
+        /**
+         * Create CSR / private key if not present
+         */
+        if (! $private_key)
         {
-            $response = new \SimpleXMLElement($response_xml_body);
-            $certificate_id = $response->CommandResponse->SSLCreateResult->SSLCertificate['CertificateID'];
+            $private_key = self::_create_key();
+        }
+        if (! $csr)
+        {
+            /**
+             * check that $data contains the required fields
+             */
+            if (!self::_check_required_data($data)) {
+                throw new \Exception('data does not contain all the required fields');
+            }
+            $csr = self::_create_csr($domain, $email, $data, $private_key);
+        }
+
+        /**
+         * Fields to be added:
+         * - Command
+         * - CertificateID
+         * - csr
+         * - WebServerType
+         * - ApproverEmail
+         */
+        $activate_data['Command'] = 'namecheap.ssl.activate';
+
+        $activate_data['CertificateID'] = $certificate_id;
+        $activate_data['csr'] = $csr;
+        $activate_data['AdminEmailAddress'] = $email;
+        $activate_data['WebServerType'] = $webservertype;
+        if ($dcv == "email")
+        {
+            $activate_data['ApproverEmail'] = $approver_email;
         }
         else
         {
-            throw new \BadMethodCallException();
+            $activate_data['ApproverEmail'] = self::_map_dcv($dcv);
         }
 
+        /**
+         * Add global fields (api_key, etc.) to the request array
+         * @see https://www.namecheap.com/support/api/methods/ssl/create.aspx
+         */
+        $request = self::_add_global_fields($activate_data);
 
         /**
-         * If we correctly have a certificate ID here we can proceed with the namecheap.ssl.activate call
-         * @see https://www.namecheap.com/support/api/methods/ssl/activate.aspx
+         * make namecheap.ssl.activate API call and get all the details back
          */
-        if ($certificate_id)
+        $response = $this->doRequest($request);
+        $is_success = (string)$response->CommandResponse->SSLActivateResult['IsSuccess'];
+        if (strtolower($is_success) == "true")
         {
-            $activate_data = [];
-
-            /**
-             * Create CSR / private key if not present
-             */
-            if (! $private_key)
+            $return = [];
+            if ($dcv == "http")
             {
-                $private_key = self::_create_key();
-            }
-            if (! $csr)
-            {
-                $csr = self::_create_csr($domain, $email, $data, $private_key);
-            }
-
-            /**
-             * Fields to be added:
-             * - Command
-             * - CertificateID
-             * - csr
-             * - WebServerType
-             * - ApproverEmail
-             */
-            $activate_data['Command'] = 'namecheap.ssl.activate';
-
-            $activate_data['CertificateID'] = $certificate_id;
-            $activate_data['csr'] = $csr;
-            $activate_data['AdminEmailAddress'] = $email;
-            $activate_data['WebServerType'] = $webservertype;
-            if ($dcv == "email")
-            {
-                $activate_data['ApproverEmail'] = $approver_email;
-            }
-            else
-            {
-                $activate_data['ApproverEmail'] = self::_map_dcv($dcv);
-            }
-
-            /**
-             * Add global fields (api_key, etc.) to the request array
-             * @see https://www.namecheap.com/support/api/methods/ssl/create.aspx
-             */
-            $request = self::_add_global_fields($activate_data);
-
-            /**
-             * make namecheap.ssl.activate API call and get all the details back
-             */
-            $response_xml = $this->getHttpClient()->createRequest()
-                ->setMethod('GET')
-                ->setUrl($this->_api_url)
-                ->setData($request)
-                ->send();
-            $response_xml_body = $response_xml->content;
-            if (strlen(trim($response_xml_body)))
-            {
-                /**
-                 * This is the array that we will return with all the details about this certificate
-                 * @see ResellerInterface;
-                 */
-                $return = [];
-
-                $response = new \SimpleXMLElement($response_xml_body);
-                $is_success = $response->CommandResponse->SSLActivateResult['IsSuccess'];
-                if (strtolower($is_success) == "true")
+                // search for HttpDCValidation > DNS > FileName
+                $filename = $response->CommandResponse->SSLActivateResult->HttpDCValidation->DNS->FileName;
+                $filecontent = $response->CommandResponse->SSLActivateResult->HttpDCValidation->DNS->FileContent;
+                if (strlen($filename) > 10 && strlen($filecontent) > 10)
                 {
-                    if ($dcv == "http")
-                    {
-                        // search for HttpDCValidation > DNS > FileName
-                        $filename = $response->CommandResponse->SSLActivateResult->HttpDCValidation->DNS->FileName;
-                        $filecontent = $response->CommandResponse->SSLActivateResult->HttpDCValidation->DNS->FileContent;
-                        if (strlen($filename) > 10 && strlen($filecontent) > 10)
-                        {
-                            $return['domains'][$domain]['dcv'] = [
-                                'type' => 'http',
-                                'filename' => $filename,
-                                'filecontent' => $filecontent,
-                            ];
-                        }
-                        else
-                        {
-                            throw new \Exception('HTTP validation - filename or filecontent not found');
-                        }
-                    }
-                    elseif ($dcv == "dns")
-                    {
-                        $hostname = $response->CommandResponse->SSLActivateResult->DNSDCValidation->DNS->HostName;
-                        $target = $response->CommandResponse->SSLActivateResult->DNSDCValidation->DNS->Target;
-                        if (strlen($hostname) > 10 && strlen($target) > 10)
-                        {
-                            $return['domains'][$domain]['dcv'] = [
-                                'type' => 'dns',
-                                'hostname' => $hostname,
-                                'target' => $target,
-                            ];
-                        }
-                        else
-                        {
-                            throw new \Exception('DNS validation - hostname or target not found');
-                        }
-
-                    }
-
-                    $return['id'] = $certificate_id;
-                    $return['status'] = self::SSL_STATUS_VALIDATING;
-                    $return['csr'] = $csr;
-                    $return['key'] = $private_key;
-
-                    /**
-                     * ok, we have everything, let's return the array
-                     */
-                    return $return;
+                    $return['domains'][$domain]['dcv'] = [
+                        'type' => 'http',
+                        'filename' => $filename,
+                        'filecontent' => $filecontent,
+                    ];
                 }
                 else
                 {
-                    throw new \Exception('activate failure');
+                    throw new \Exception('HTTP validation - filename or filecontent not found');
                 }
             }
-            else
+            elseif ($dcv == "dns")
             {
-                throw new \BadMethodCallException();
+                $hostname = $response->CommandResponse->SSLActivateResult->DNSDCValidation->DNS->HostName;
+                $target = $response->CommandResponse->SSLActivateResult->DNSDCValidation->DNS->Target;
+                if (strlen($hostname) > 10 && strlen($target) > 10)
+                {
+                    $return['domains'][$domain]['dcv'] = [
+                        'type' => 'dns',
+                        'hostname' => $hostname,
+                        'target' => $target,
+                    ];
+                }
+                else
+                {
+                    throw new \Exception('DNS validation - hostname or target not found');
+                }
+
             }
 
+            $return['id'] = $certificate_id;
+            $return['status'] = self::SSL_STATUS_VALIDATING;
+            $return['csr'] = $csr;
+            $return['key'] = $private_key;
+
+            /**
+             * ok, we have everything, let's return the array
+             */
+            return $return;
         }
 
     }
@@ -286,35 +269,21 @@ class Namecheap extends AbstractReseller
         /**
          * make API call and get a certificate info back
          */
-        $response_xml = $this->getHttpClient()->createRequest()
-            ->setMethod('GET')
-            ->setUrl($this->_api_url)
-            ->setData($request)
-            ->send();
-        $response_xml_body = $response_xml->content;
-        if (strlen(trim($response_xml_body)))
+        $response = $this->doRequest($request);
+        $return['status'] = self::_map_status((string)$response->CommandResponse->SSLGetInfoResult['Status']);
+        $return['expire_time'] = strtotime((string)$response->CommandResponse->SSLGetInfoResult['Expires']);
+        $return['csr'] = (string)$response->CommandResponse->CertificateDetails->CSR;
+        foreach ($response->CommandResponse->CertificateDetails->Certificates->Certificate as $certificate)
         {
-            $response = new \SimpleXMLElement($response_xml_body);
-            $return['status'] = self::_map_status($response->CommandResponse->SSLGetInfoResult['Status']);
-            $return['expires_on'] = strtotime($response->CommandResponse->SSLGetInfoResult['Expires']);
-            $return['csr'] = $response->CommandResponse->CertificateDetails->CSR;
-            foreach ($response->CommandResponse->CertificateDetails->Certificates->Certificate as $certificate)
+            if (strtoupper((string)$certificate['type']) == "INTERMEDIATE")
             {
-                if (strtoupper($certificate['type']) == "INTERMEDIATE")
-                {
-                    $return['intermediate'] = $certificate;
-                }
-                else
-                {
-                    $return['crt'] = $certificate;
-                }
+                $return['intermediate'] = $certificate;
+            }
+            else
+            {
+                $return['crt'] = $certificate;
             }
         }
-        else
-        {
-            throw new \BadMethodCallException();
-        }
-
         return $return;
     }
 
@@ -347,6 +316,30 @@ class Namecheap extends AbstractReseller
 
 
 
+    public function doRequest($data, $method = "GET")
+    {
+        $response_xml = $this->getHttpClient()->createRequest()
+            ->setMethod($method)
+            ->setUrl($this->_api_url)
+            ->setData($data)
+            ->send();
+        $response_xml_body = $response_xml->content;
+        if (strlen(trim($response_xml_body)))
+        {
+            $response = new \SimpleXMLElement($response_xml_body);
+            if ($response->Errors->Error)
+            {
+                throw new \Exception($response->Errors->Error, $response->Errors->Error['number']);
+            }
+            return $response;
+        }
+        else
+        {
+            throw new \Exception("Empty response");
+        }
+    }
+
+
 
     private function _add_global_fields(array $fields)
     {
@@ -354,10 +347,10 @@ class Namecheap extends AbstractReseller
             'ApiUser' => $this->_api_user,
             'ApiKey' => $this->_api_key,
             'UserName' => $this->_api_user,
-            'ClientIp' => self::_clientIP(),
+            'ClientIp' => self::_clientIP($this->_sandbox),
         ];
 
-        array_push($fields, $common_fields);
+        $fields = array_merge($fields, $common_fields);
         return $fields;
     }
 
@@ -411,9 +404,24 @@ class Namecheap extends AbstractReseller
             'multidomain' => 'PositiveSSL Multi Domain',
         ];
 
-        $_type = $_mapping[$type];
+        $_type = $_mapping[strtolower($type)];
         if (! $_type) {
             throw new \InvalidArgumentException('wrong ssl certificate type: "' . $type . '"');
+        }
+        return $_type;
+    }
+
+    private static function _map_type_reverse($type)
+    {
+        $_mapping = [
+            'positivessl' => 'single',
+            'positivessl wildcard' => 'wildcard',
+            'positivessl multi domain' => 'multidomain',
+        ];
+
+        $_type = $_mapping[strtolower($type)];
+        if (! $_type) {
+            $_type = $type;
         }
         return $_type;
     }
@@ -437,14 +445,14 @@ class Namecheap extends AbstractReseller
     private static function _map_status($status)
     {
         $_mapping = [
-            'Active' => 'active',
-            'Purchased' => 'validating',
-            'Newpurchase' => 'pending',
-            'Purchaseerror' => 'error',
+            'active' => 'active',
+            'purchased' => 'validating',
+            'newpurchase' => 'pending',
+            'purchaseerror' => 'error',
         ];
         $_default_status = "error";
 
-        $_status = $_mapping[$status];
+        $_status = $_mapping[strtolower($status)];
         if (! $_status) {
             $_status = $_default_status;
         }

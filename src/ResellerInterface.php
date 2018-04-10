@@ -85,18 +85,38 @@ interface ResellerInterface
 
 
     /**
-     * This function creates a new certificate, bundling all the required steps
-     * (for example on Namecheap there's the "create" call and then the "activate" call) and gets it in the "validating" state
-     * After this usually a
+     * Retrieve the list of certificates owned by the current user.
      *
-     * ```php
-     * $certificate_request = $reseller->sslCreate($domain, $years, $data);
-     * // in $certificate_request we now have the certificate ID, the CSR and the Key
-     * // we need to store these so we can use them later for Apache, etc.
-     * ```
-     *
+     * @param string $search
+     * @return array $list Returns an array of certificates with the following structure:
+     *  [
+     *      '1234' => [
+     *          'id'            => '1234',
+     *          'domain'        => 'domain.com',
+     *          'status'        => 'pending|validating|active|error',
+     *          'purchase_time' => 1523345727 (Unix timestamp of the purchase date),
+     *          'expire_time'   => 1523345727 (Unix timestamp of the expiration date),
+     *          'type'          => 'single\wildcard',
+     *      ],
+     *      ...
+     *  ]
+     */
+    public function sslList($search = '');
+
+
+    /**
+     * This function creates a new certificate and puts it in the "validating" state.
+     * This is the first step when creating a certificate, preceding the "activate" phase when
+     * the data collected/provided in this phase (mainly for the domain validation) is used in the
+     * actual domain/website/email so that the certificate is finally "active" (checked with the "sslCheck" method
      *
      * @param string $type Can be one of the following: "single", "wildcard"
+     * @return string $certificate_id The ID of the certificate created, usually to be then passed to sslActivate
+    */
+    public function sslCreate($type);
+
+    /**
+     * @param string $certificate_id The ID of the certificate to activate (usually received from an sslCreate call)
      * @param string $domain The domain(s) (as a string or as an array) for which we are creating this certificate. Max 3 domains.
      * @param string $email The email address to send signed SSL certificate files to
      * @param array $data An associative array with the following details:
@@ -141,7 +161,7 @@ interface ResellerInterface
      *          ]
      *      ]
      */
-    public function sslCreate($type, $domain, $email, array $data, $dcv = 'http', $csr = '', $private_key = '', $webservertype = 'apacheopenssl', $approver_email = '');
+    public function sslActivate($certificate_id, $domain, $email, array $data, $dcv = 'http', $csr = '', $private_key = '', $webservertype = 'apacheopenssl', $approver_email = '');
 
     /**
      * ```php
@@ -157,12 +177,13 @@ interface ResellerInterface
      *
      * @return array $certificate Data structure with the following fields:
      *      [
-     *          'id' => "123456" (the ID of the certificate)
-     *          'status' => "active" (the current status, chosing among: "pending", "active", "validating", "error")
-     *          'expires_on' => 1523345727 (Unix timestamp of the expiration date)
-     *          'csr' => "-----BEGIN CERTIFICATE----- MIIFBDCCA+ygAwIBAgIQJXnrY7043Qfa... -----END CERTIFICATE-----",
-     *          'crt' => "-----BEGIN CERTIFICATE----- AgIBATANBgkqhkiG9w0BAQUFADBvMQswCQYD... -----END CERTIFICATE-----",
-     *          'intermediate' => "-----BEGIN CERTIFICATE----- AgIBATANBgkqhkiG9w0BAQUFADBvMQswCQYD... -----END CERTIFICATE-----",
+     *          'id'            => "123456" (the ID of the certificate)
+     *          'status'        => "active" (the current status, chosing among: "pending", "active", "validating", "error")
+     *          'purchase_time' => 1523345727 (Unix timestamp of the expiration date)
+     *          'expire_time'   => 1523345727 (Unix timestamp of the expiration date)
+     *          'csr'           => "-----BEGIN CERTIFICATE----- MIIFBDCCA+ygAwIBAgIQJXnrY7043Qfa... -----END CERTIFICATE-----",
+     *          'crt'           => "-----BEGIN CERTIFICATE----- AgIBATANBgkqhkiG9w0BAQUFADBvMQswCQYD... -----END CERTIFICATE-----",
+     *          'intermediate'  => "-----BEGIN CERTIFICATE----- AgIBATANBgkqhkiG9w0BAQUFADBvMQswCQYD... -----END CERTIFICATE-----",
      *      ]
      */
     public function sslCheck($id);
@@ -182,4 +203,15 @@ interface ResellerInterface
     public function userDomainsList();
     public function userSslList();
     public function userBalance();
+
+
+    /**
+     * This method is in charge of managing the actual API calls. It builds the request and checks for errors.
+     * If errors are found it throws the corresponding exception. If no errors are found,
+     * it returns the appropriate data object (for example a SimpleXML object for Namecheap, ...)
+     *
+     * @param $data
+     * @return mixed
+     */
+    public function doRequest($data, $method = "GET");
 }

@@ -8,8 +8,9 @@
 
 namespace TheMavenSystem\DomainsSSLReseller;
 
-use yii\base\Component;
-use yii\httpclient\Client;
+use Yii;
+use \yii\base\Component;
+use \yii\httpclient\Client;
 
 abstract class AbstractReseller implements ResellerInterface
 {
@@ -18,6 +19,12 @@ abstract class AbstractReseller implements ResellerInterface
     const SSL_STATUS_ERROR = 'error';
     const SSL_STATUS_ACTIVE = 'active';
 
+
+    protected $_api_user;
+    protected $_api_key;
+    protected $_api_url;
+    protected $_sandbox;
+
     protected $_httpClient;
 
     abstract function domainCheck($domains);
@@ -25,14 +32,17 @@ abstract class AbstractReseller implements ResellerInterface
     abstract function domainInfo($domain);
     abstract function domainRenew($domain);
 
+    abstract function sslList($search = '');
     abstract function sslCheck($id);
-    abstract function sslCreate($type, $domain, $email, array $data, $dcv = 'http', $csr = '', $private_key = '', $webservertype = 'apacheopenssl', $approver_email = '');
+    abstract function sslCreate($type);
+    abstract function sslActivate($certificate_id, $domain, $email, array $data, $dcv = 'http', $csr = '', $private_key = '', $webservertype = 'apacheopenssl', $approver_email = '');
     abstract function sslApproverEmails($domain);
 
     abstract function userBalance();
     abstract function userDomainsList();
     abstract function userSslList();
 
+    abstract function doRequest($data, $method = "GET");
 
 
     protected function getHttpClient()
@@ -72,9 +82,16 @@ abstract class AbstractReseller implements ResellerInterface
     }
 
 
-    protected static function _clientIP()
+    protected static function _clientIP($sandbox)
     {
-        return $_SERVER['SERVER_ADDR'];
+        if ($sandbox)
+        {
+            return "93.35.147.96";
+        }
+        else
+        {
+            return $_SERVER['SERVER_ADDR'];
+        }
     }
 
 
