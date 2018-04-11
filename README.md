@@ -1,5 +1,7 @@
-<p align="center;">
-    <img src="https://core3.imgix.net/58fe072691aadlogo1bluetransparent.png" width="50">
+<p align="center">
+    <a href="https://www.themavensystem.com/" target="_blank">
+        <img src="https://core3.imgix.net/58fe072691aadlogo1bluetransparent.png" height="75">
+    </a>
 </p>
 <h1 align="center">
 Domains/SSL Reseller API - Yii2 Extension
