@@ -145,6 +145,36 @@ class Namecheap extends AbstractReseller
      */
     public function sslActivate($certificate_id, $domain, $email, array $data, $dcv = 'http', $csr = '', $private_key = '', $webservertype = 'apacheopenssl', $approver_email = '')
     {
+        return $this->_doActivate("activate",$certificate_id, $domain, $email, $data, $dcv, $csr, $private_key, $webservertype, $approver_email);
+    }
+
+    /**
+     * @see https://www.namecheap.com/support/api/methods/ssl/reissue.aspx
+     */
+    public function sslReissue($certificate_id, $domain, $email, array $data, $dcv = 'http', $csr = '', $private_key = '', $webservertype = 'apacheopenssl', $approver_email = '')
+    {
+        return $this->_doActivate("reissue",$certificate_id, $domain, $email, $data, $dcv, $csr, $private_key, $webservertype, $approver_email);
+    }
+
+    /**
+     * Since "activate" and "reissue" are basically the same action but with a different name a base method is used for
+     * both calls and the only difference is the actual Namecheap command
+     *
+     * @param $action
+     * @param $certificate_id
+     * @param $domain
+     * @param $email
+     * @param array $data
+     * @param string $dcv
+     * @param string $csr
+     * @param string $private_key
+     * @param string $webservertype
+     * @param string $approver_email
+     * @return array
+     * @throws \Exception
+     */
+    private function _doActivate($action, $certificate_id, $domain, $email, array $data, $dcv = 'http', $csr = '', $private_key = '', $webservertype = 'apacheopenssl', $approver_email = '')
+    {
         /**
          * Create CSR / private key if not present
          */
@@ -171,7 +201,14 @@ class Namecheap extends AbstractReseller
          * - WebServerType
          * - ApproverEmail
          */
-        $activate_data['Command'] = 'namecheap.ssl.activate';
+        if ($action == "reissue")
+        {
+            $activate_data['Command'] = 'namecheap.ssl.reissue';
+        }
+        else
+        {
+            $activate_data['Command'] = 'namecheap.ssl.activate';
+        }
 
         $activate_data['CertificateID'] = $certificate_id;
         $activate_data['csr'] = $csr;
@@ -184,6 +221,14 @@ class Namecheap extends AbstractReseller
         else
         {
             $activate_data['ApproverEmail'] = self::_map_dcv($dcv);
+            if ($dcv == "dns")
+            {
+                $activate_data['DNSDCValidation'] = "true";
+            }
+            else
+            {
+                $activate_data['HTTPDCValidation'] = "true";
+            }
         }
 
         /**
@@ -191,6 +236,7 @@ class Namecheap extends AbstractReseller
          * @see https://www.namecheap.com/support/api/methods/ssl/create.aspx
          */
         $request = self::_add_global_fields($activate_data);
+        echo '<pre>'; print_r($request); die;
 
         /**
          * make namecheap.ssl.activate API call and get all the details back
@@ -251,7 +297,7 @@ class Namecheap extends AbstractReseller
     }
 
 
-    public function sslCheck($id)
+    public function sslCheck($id, $domain = '', $dcv = 'http', $approver_email = '')
     {
         $return = [];
 
@@ -270,10 +316,13 @@ class Namecheap extends AbstractReseller
          * make API call and get a certificate info back
          */
         $response = $this->doRequest($request);
+        $return['id'] = $id;
         $return['status'] = self::_map_status((string)$response->CommandResponse->SSLGetInfoResult['Status']);
         $return['expire_time'] = strtotime((string)$response->CommandResponse->SSLGetInfoResult['Expires']);
-        $return['csr'] = (string)$response->CommandResponse->CertificateDetails->CSR;
-        foreach ($response->CommandResponse->CertificateDetails->Certificates->Certificate as $certificate)
+        $return['csr'] = (string)$response->CommandResponse->SSLGetInfoResult->CertificateDetails->CSR;
+        $return['dcv'] = self::_map_dcv_reverse((string)$response->CommandResponse->SSLGetInfoResult->CertificateDetails->ApproverEmail);
+        $return['domain'] = (string)$response->CommandResponse->SSLGetInfoResult->CertificateDetails->CommonName;
+        foreach ($response->CommandResponse->SSLGetInfoResult->CertificateDetails->Certificates->Certificate as $certificate)
         {
             if (strtoupper((string)$certificate['type']) == "INTERMEDIATE")
             {
@@ -284,8 +333,74 @@ class Namecheap extends AbstractReseller
                 $return['crt'] = $certificate;
             }
         }
+
+
+        /**
+         * if status is "validating" we also re-get the DCV data
+         * @see https://www.namecheap.com/support/api/methods/ssl/editDCVMethod.aspx
+         */
+        if ($return['status'] == 'validating')
+        {
+            $dcv_data = [];
+            $dcv_data['Command'] = "namecheap.ssl.editDCVMethod";
+            $dcv_data['CertificateID'] = $id;
+            if ($dcv == "email") {
+                $dcv_data['DCVMethod'] = $approver_email;
+            } else {
+                $dcv_data['DCVMethod'] = self::_map_dcv($dcv ? $dcv : $return['dcv'], true);
+            }
+
+            /**
+             * make API call and get a certificate info back
+             */
+            $request = self::_add_global_fields($dcv_data);
+            $response = $this->doRequest($request);
+
+            /**
+             * save this data in $return
+             */
+            if ($dcv == "http")
+            {
+                // search for HttpDCValidation > DNS > FileName
+                $filename = (string)$response->CommandResponse->SSLEditDCVMethodResult->HttpDCValidation->FileName;
+                $filecontent = (string)$response->CommandResponse->SSLEditDCVMethodResult->HttpDCValidation->FileContent;
+                if (strlen($filename) > 10 && strlen($filecontent) > 10)
+                {
+                    $return['domains'][$domain ? $domain : $return['domain']]['dcv'] = [
+                        'type' => 'http',
+                        'filename' => $filename,
+                        'filecontent' => $filecontent,
+                    ];
+                }
+                else
+                {
+                    throw new \Exception('HTTP validation - filename or filecontent not found');
+                }
+            }
+            elseif ($dcv == "dns")
+            {
+                $hostname = (string)$response->CommandResponse->SSLEditDCVMethodResult->DNSDCValidation->HostName;
+                $target = (string)$response->CommandResponse->SSLEditDCVMethodResult->DNSDCValidation->Target;
+                if (strlen($hostname) > 10 && strlen($target) > 10)
+                {
+                    $return['domains'][$domain ? $domain : $return['domain']]['dcv'] = [
+                        'type' => 'dns',
+                        'hostname' => $hostname,
+                        'target' => $target,
+                    ];
+                }
+                else
+                {
+                    throw new \Exception('DNS validation - hostname or target not found');
+                }
+
+            }
+
+        }
+
         return $return;
     }
+
 
 
     public function sslApproverEmails($domain)
@@ -326,7 +441,7 @@ class Namecheap extends AbstractReseller
         $response_xml_body = $response_xml->content;
         if (strlen(trim($response_xml_body)))
         {
-            $response = new \SimpleXMLElement($response_xml_body);
+            $response = new \SimpleXMLElement($response_xml_body, LIBXML_NOCDATA);
             if ($response->Errors->Error)
             {
                 throw new \Exception($response->Errors->Error, $response->Errors->Error['number']);
@@ -427,12 +542,29 @@ class Namecheap extends AbstractReseller
     }
 
 
-    private static function _map_dcv($dcv)
+    /**
+     * @param $dcv
+     * @param bool $editDCVMethod   This is used when we need to data for editDCVMethod
+     * @see https://www.namecheap.com/support/api/methods/ssl/editDCVMethod.aspx
+     *
+     * @return mixed
+     */
+    private static function _map_dcv($dcv, $editDCVMethod = false)
     {
-        $_mapping = [
-            'http' => 'HTTPCSRHASH',
-            'dns' => 'CNAMECSRHASH',
-        ];
+        if ($editDCVMethod)
+        {
+            $_mapping = [
+                'http' => 'HTTP_CSR_HASH',
+                'dns' => 'CNAME_CSR_HASH',
+            ];
+        }
+        else
+        {
+            $_mapping = [
+                'http' => 'HTTPCSRHASH',
+                'dns' => 'CNAMECSRHASH',
+            ];
+        }
 
         $_dcv = $_mapping[$dcv];
         if (! $_dcv) {
@@ -441,7 +573,33 @@ class Namecheap extends AbstractReseller
         return $_dcv;
     }
 
-    
+
+    private static function _map_dcv_reverse($reverse_dcv, $editDCVMethod = false)
+    {
+        if ($editDCVMethod)
+        {
+            $_mapping = [
+                'HTTP_CSR_HASH' => 'http',
+                'CNAME_CSR_HASH' => 'dns',
+            ];
+        }
+        else
+        {
+            $_mapping = [
+                'HTTPCSRHASH' => 'http',
+                'CNAMECSRHASH' => 'dns',
+            ];
+        }
+
+        $_dcv = $_mapping[$reverse_dcv];
+        if (! $_dcv) {
+            throw new \InvalidArgumentException('wrong ssl certificate DCV: "' . $reverse_dcv . '"');
+        }
+        return $_dcv;
+    }
+
+
+
     private static function _map_status($status)
     {
         $_mapping = [

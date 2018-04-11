@@ -164,6 +164,22 @@ interface ResellerInterface
     public function sslActivate($certificate_id, $domain, $email, array $data, $dcv = 'http', $csr = '', $private_key = '', $webservertype = 'apacheopenssl', $approver_email = '');
 
     /**
+     * Re-issues a certificate - basically re-does the activation step, with a new key, CSR etc.
+     *
+     * @param $certificate_id
+     * @param $domain
+     * @param $email
+     * @param array $data
+     * @param string $dcv
+     * @param string $csr
+     * @param string $private_key
+     * @param string $webservertype
+     * @param string $approver_email
+     * @return mixed
+     */
+    public function sslReissue($certificate_id, $domain, $email, array $data, $dcv = 'http', $csr = '', $private_key = '', $webservertype = 'apacheopenssl', $approver_email = '');
+
+    /**
      * ```php
      * $ssl_check = $reseller->sslCheck($id);
      * if ($ssl_check['status'] == "active") {
@@ -186,7 +202,7 @@ interface ResellerInterface
      *          'intermediate'  => "-----BEGIN CERTIFICATE----- AgIBATANBgkqhkiG9w0BAQUFADBvMQswCQYD... -----END CERTIFICATE-----",
      *      ]
      */
-    public function sslCheck($id);
+    public function sslCheck($id, $domain = '', $dcv = 'http', $approver_email = '');
 
     /**
      * This function is used for getting the list of possible "approver emails" for an SSL certificate,

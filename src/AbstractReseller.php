@@ -33,9 +33,10 @@ abstract class AbstractReseller implements ResellerInterface
     abstract function domainRenew($domain);
 
     abstract function sslList($search = '');
-    abstract function sslCheck($id);
+    abstract function sslCheck($id, $domain = '', $dcv = 'http', $approver_email = '');
     abstract function sslCreate($type);
     abstract function sslActivate($certificate_id, $domain, $email, array $data, $dcv = 'http', $csr = '', $private_key = '', $webservertype = 'apacheopenssl', $approver_email = '');
+    abstract function sslReissue($certificate_id, $domain, $email, array $data, $dcv = 'http', $csr = '', $private_key = '', $webservertype = 'apacheopenssl', $approver_email = '');
     abstract function sslApproverEmails($domain);
 
     abstract function userBalance();
@@ -59,7 +60,6 @@ abstract class AbstractReseller implements ResellerInterface
     protected static function _check_required_data(array $fields)
     {
         $_required_fields = [
-            'email',
             'organization_name',
             'organization_unit_name',
             'country',
@@ -67,7 +67,6 @@ abstract class AbstractReseller implements ResellerInterface
             'city',
             'address',
             'zip',
-            'command',
         ];
 
         foreach ($_required_fields as $_required_field)
@@ -102,10 +101,11 @@ abstract class AbstractReseller implements ResellerInterface
             throw new \Exception("If you don't provide a CSR/private key the OpenSSL extension needs to be installed");
         }
 
-        $private_key = openssl_pkey_new(array(
+        $private_key_res = openssl_pkey_new(array(
             "private_key_bits" => 2048,
             "private_key_type" => OPENSSL_KEYTYPE_RSA,
         ));
+        openssl_pkey_export($private_key_res, $private_key);
         return $private_key;
     }
 
@@ -127,7 +127,8 @@ abstract class AbstractReseller implements ResellerInterface
             "emailAddress" => $email,
         );
 
-        $csr = openssl_csr_new($dn, $private_key, array('digest_alg' => 'sha256'));
+        $csr_res = openssl_csr_new($dn, $private_key, array('digest_alg' => 'sha256'));
+        openssl_csr_export($csr_res, $csr);
         return $csr;
     }
 
