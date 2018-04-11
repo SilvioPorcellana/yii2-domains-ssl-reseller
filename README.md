@@ -1,7 +1,7 @@
-<p style="text-align: center;">
-    <img src="https://core3.imgix.net/58fe072691aadlogo1bluetransparent.png">
+<p align="center;">
+    <img src="https://core3.imgix.net/58fe072691aadlogo1bluetransparent.png" width="50">
 </p>
-<h1 style="text-align: center;">
+<h1 align="center">
 Domains/SSL Reseller API - Yii2 Extension
 </h1>
 
