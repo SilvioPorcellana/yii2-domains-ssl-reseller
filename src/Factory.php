@@ -30,11 +30,11 @@ final class Factory
      * This method should usually only be called once at the beginning of the program.
      *
      */
-    public static function create($reseller_name, $api_user = '', $api_key = '')
+    public static function create($reseller_name, $api_user = '', $api_key = '', $sandbox = false)
     {
         switch ($reseller_name) {
             case "namecheap":
-                return new \TheMavenSystem\DomainsSSLReseller\Reseller\Namecheap($api_user, $api_key);
+                return new \TheMavenSystem\DomainsSSLReseller\Reseller\Namecheap($api_user, $api_key, $sandbox);
                 break;
             default:
                 throw new \InvalidArgumentException("Invalid reseller name");

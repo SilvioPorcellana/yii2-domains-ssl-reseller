@@ -85,19 +85,39 @@ interface ResellerInterface
 
 
     /**
-     * This function creates a new certificate, bundling all the required steps
-     * (for example on Namecheap there's the "create" call and then the "activate" call) and gets it in the "validating" state
-     * After this usually a
+     * Retrieve the list of certificates owned by the current user.
      *
-     * ```php
-     * $certificate_request = $reseller->sslCreate($domain, $years, $data);
-     * // in $certificate_request we now have the certificate ID, the CSR and the Key
-     * // we need to store these so we can use them later for Apache, etc.
-     * ```
+     * @param string $search
+     * @return array $list Returns an array of certificates with the following structure:
+     *  [
+     *      '1234' => [
+     *          'id'            => '1234',
+     *          'domain'        => 'domain.com',
+     *          'status'        => 'pending|validating|active|error',
+     *          'purchase_time' => 1523345727 (Unix timestamp of the purchase date),
+     *          'expire_time'   => 1523345727 (Unix timestamp of the expiration date),
+     *          'type'          => 'single\wildcard',
+     *      ],
+     *      ...
+     *  ]
+     */
+    public function sslList($search = '');
+
+
+    /**
+     * This function creates a new certificate and puts it in the "validating" state.
+     * This is the first step when creating a certificate, preceding the "activate" phase when
+     * the data collected/provided in this phase (mainly for the domain validation) is used in the
+     * actual domain/website/email so that the certificate is finally "active" (checked with the "sslCheck" method
      *
-     *
-     * @param string $type Can be one of the following: "single", "wildcard", "multidomain"
-     * @param mixed $domains The domain(s) (as a string or as an array) for which we are creating this certificate. Max 3 domains.
+     * @param string $type Can be one of the following: "single", "wildcard"
+     * @return string $certificate_id The ID of the certificate created, usually to be then passed to sslActivate
+    */
+    public function sslCreate($type);
+
+    /**
+     * @param string $certificate_id The ID of the certificate to activate (usually received from an sslCreate call)
+     * @param string $domain The domain(s) (as a string or as an array) for which we are creating this certificate. Max 3 domains.
      * @param string $email The email address to send signed SSL certificate files to
      * @param array $data An associative array with the following details:
      *      [
@@ -109,7 +129,10 @@ interface ResellerInterface
      *          'address' => "Los Angeles",
      *          'zip' => "00189",
      *      ]
-     * @param string $dcv The validation type (default is "http" whit a file placed in the /.well-known/pki-validation/ directory
+     * @param string $dcv The validation type. Options are:
+     * - 'email' (email is sent to the chosen approver email
+     * - 'http' (default - a file placed in the /.well-known/pki-validation/ directory)
+     * - 'dns' (a CNAME needs to be created for the selected domain)
      * @param string $csr If absent a new CSR will be created with the $data provided
      * @param string $key If absent a new key will be created
      * @param string $webservertype Allowed values are listed in https://www.namecheap.com/support/api/methods/ssl/activate.aspx
@@ -138,7 +161,23 @@ interface ResellerInterface
      *          ]
      *      ]
      */
-    public function sslCreate($type, $domains, $email, array $data, $dcv = 'http', $csr = '', $key = '', $webservertype = 'apacheopenssl');
+    public function sslActivate($certificate_id, $domain, $email, array $data, $dcv = 'http', $csr = '', $private_key = '', $webservertype = 'apacheopenssl', $approver_email = '');
+
+    /**
+     * Re-issues a certificate - basically re-does the activation step, with a new key, CSR etc.
+     *
+     * @param $certificate_id
+     * @param $domain
+     * @param $email
+     * @param array $data
+     * @param string $dcv
+     * @param string $csr
+     * @param string $private_key
+     * @param string $webservertype
+     * @param string $approver_email
+     * @return mixed
+     */
+    public function sslReissue($certificate_id, $domain, $email, array $data, $dcv = 'http', $csr = '', $private_key = '', $webservertype = 'apacheopenssl', $approver_email = '');
 
     /**
      * ```php
@@ -154,18 +193,41 @@ interface ResellerInterface
      *
      * @return array $certificate Data structure with the following fields:
      *      [
-     *          'id' => "123456" (the ID of the certificate)
-     *          'status' => "active" (the current status of the certificate, chosing among: "active", "validating" or "error")
-     *          'csr' => "-----BEGIN CERTIFICATE----- MIIFBDCCA+ygAwIBAgIQJXnrY7043Qfa... -----END CERTIFICATE-----",
-     *          'crt' => "-----BEGIN CERTIFICATE----- AgIBATANBgkqhkiG9w0BAQUFADBvMQswCQYD... -----END CERTIFICATE-----",
-     *          'intermediate' => "-----BEGIN CERTIFICATE----- AgIBATANBgkqhkiG9w0BAQUFADBvMQswCQYD... -----END CERTIFICATE-----",
+     *          'id'            => "123456" (the ID of the certificate)
+     *          'status'        => "active" (the current status, chosing among: "pending", "active", "validating", "error")
+     *          'purchase_time' => 1523345727 (Unix timestamp of the expiration date)
+     *          'expire_time'   => 1523345727 (Unix timestamp of the expiration date)
+     *          'csr'           => "-----BEGIN CERTIFICATE----- MIIFBDCCA+ygAwIBAgIQJXnrY7043Qfa... -----END CERTIFICATE-----",
+     *          'crt'           => "-----BEGIN CERTIFICATE----- AgIBATANBgkqhkiG9w0BAQUFADBvMQswCQYD... -----END CERTIFICATE-----",
+     *          'intermediate'  => "-----BEGIN CERTIFICATE----- AgIBATANBgkqhkiG9w0BAQUFADBvMQswCQYD... -----END CERTIFICATE-----",
      *      ]
      */
-    public function sslCheck($id);
+    public function sslCheck($id, $domain = '', $dcv = 'http', $approver_email = '');
+
+    /**
+     * This function is used for getting the list of possible "approver emails" for an SSL certificate,
+     * to be used when the "email" domain verification method is selected.
+     * Once chosen, the activation email for this certificate is sent to this email address.
+     *
+     * @param $domain
+     * @return mixed
+     */
+    public function sslApproverEmails($domain);
 
 
     // user
     public function userDomainsList();
     public function userSslList();
     public function userBalance();
+
+
+    /**
+     * This method is in charge of managing the actual API calls. It builds the request and checks for errors.
+     * If errors are found it throws the corresponding exception. If no errors are found,
+     * it returns the appropriate data object (for example a SimpleXML object for Namecheap, ...)
+     *
+     * @param $data
+     * @return mixed
+     */
+    public function doRequest($data, $method = "GET");
 }
