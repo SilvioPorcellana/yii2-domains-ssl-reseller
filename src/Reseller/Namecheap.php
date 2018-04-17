@@ -294,7 +294,7 @@ class Namecheap extends AbstractReseller
         }
 
     }
-    
+
 
 
     public function sslCheck($id, $domain = '', $dcv = 'http', $approver_email = '')
