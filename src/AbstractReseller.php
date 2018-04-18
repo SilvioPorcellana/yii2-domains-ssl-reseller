@@ -61,7 +61,6 @@ abstract class AbstractReseller implements ResellerInterface
     {
         $_required_fields = [
             'organization_name',
-            'organization_unit_name',
             'country',
             'state',
             'city',

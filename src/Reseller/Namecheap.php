@@ -236,7 +236,6 @@ class Namecheap extends AbstractReseller
          * @see https://www.namecheap.com/support/api/methods/ssl/create.aspx
          */
         $request = self::_add_global_fields($activate_data);
-        echo '<pre>'; print_r($request); die;
 
         /**
          * make namecheap.ssl.activate API call and get all the details back
@@ -249,8 +248,8 @@ class Namecheap extends AbstractReseller
             if ($dcv == "http")
             {
                 // search for HttpDCValidation > DNS > FileName
-                $filename = $response->CommandResponse->SSLActivateResult->HttpDCValidation->DNS->FileName;
-                $filecontent = $response->CommandResponse->SSLActivateResult->HttpDCValidation->DNS->FileContent;
+                $filename = (string)$response->CommandResponse->SSLActivateResult->HttpDCValidation->DNS->FileName;
+                $filecontent = (string)$response->CommandResponse->SSLActivateResult->HttpDCValidation->DNS->FileContent;
                 if (strlen($filename) > 10 && strlen($filecontent) > 10)
                 {
                     $return['domains'][$domain]['dcv'] = [
@@ -266,8 +265,8 @@ class Namecheap extends AbstractReseller
             }
             elseif ($dcv == "dns")
             {
-                $hostname = $response->CommandResponse->SSLActivateResult->DNSDCValidation->DNS->HostName;
-                $target = $response->CommandResponse->SSLActivateResult->DNSDCValidation->DNS->Target;
+                $hostname = (string)$response->CommandResponse->SSLActivateResult->DNSDCValidation->DNS->HostName;
+                $target = (string)$response->CommandResponse->SSLActivateResult->DNSDCValidation->DNS->Target;
                 if (strlen($hostname) > 10 && strlen($target) > 10)
                 {
                     $return['domains'][$domain]['dcv'] = [
@@ -295,6 +294,7 @@ class Namecheap extends AbstractReseller
         }
 
     }
+
 
 
     public function sslCheck($id, $domain = '', $dcv = 'http', $approver_email = '')
