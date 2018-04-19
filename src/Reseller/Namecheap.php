@@ -322,17 +322,12 @@ class Namecheap extends AbstractReseller
         $return['csr'] = (string)$response->CommandResponse->SSLGetInfoResult->CertificateDetails->CSR;
         $return['dcv'] = self::_map_dcv_reverse((string)$response->CommandResponse->SSLGetInfoResult->CertificateDetails->ApproverEmail);
         $return['domain'] = (string)$response->CommandResponse->SSLGetInfoResult->CertificateDetails->CommonName;
-        foreach ($response->CommandResponse->SSLGetInfoResult->CertificateDetails->Certificates->Certificate as $certificate)
+        $return['crt'] = (string)$response->CommandResponse->SSLGetInfoResult->CertificateDetails->Certificates->Certificate;
+        foreach ($response->CommandResponse->SSLGetInfoResult->CertificateDetails->Certificates->CaCertificates->Certificate as $ca_certificate)
         {
-            if (strtoupper((string)$certificate['type']) == "INTERMEDIATE")
-            {
-                $return['intermediate'] = $certificate;
-            }
-            else
-            {
-                $return['crt'] = $certificate;
-            }
+            $return['intermediate'] .= (string)$ca_certificate->Certificate . "\n";
         }
+        $return['intermediate'] = trim($return['intermediate']);
 
 
         /**
